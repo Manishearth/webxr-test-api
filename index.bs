@@ -10,7 +10,7 @@ Level: 1
 Editor: Manish Goregaokar 109489, Mozilla http://mozilla.org/, manish@mozilla.com
 Editor: Alex Cooper 114716, Google http://google.com/, alcooper@google.com
 
-Abstract: The WebXR Test API module provides a mocking interface for <a href="https://github.com/web-platform-tests/">Web Platform Tests</a> to be able to test the <a href="https://www.w3.org/TR/webxr/">WebXR Device API</a>.
+Abstract: The WebXR Test API module provides a mocking inter`ace for <a href="https://github.com/web-platform-tests/">Web Platform Tests</a> to be able to test the <a href="https://www.w3.org/TR/webxr/">WebXR Device API</a>.
 
 Warning: custom
 Custom Warning Title: Testing-only API
@@ -51,6 +51,11 @@ spec: WebXR Device API - Level 1; urlPrefix: https://immersive-web.github.io/web
     type: constructor; for:XRRigidTransform; text:constructor; url: dom-xrrigidtransform-xrrigidtransform;
     type: interface; text: XREye; url: xreye-interface
     type: interface; text: XRHandedness; url: xrhandedness-interface
+    type: interface; text: XRInputSource; url: xrhandedness-interface
+    type: attribute; text: handedness; for: XRInputSource; url: dom-xrinputsource-handedness
+    type: attribute; text: targetRayMode; for: XRInputSource; url: dom-xrinputsource-targetraymode
+    type: attribute; text: profiles; for: XRInputSource; url: dom-xrinputsource-profiles
+    type: attribute; text: gripSpace; for: XRInputSource; url: dom-xrinputsource-gripspace
     type:dfn; text:XR device; url: xr-device
     type:dfn; text:capable of supporting; url: capable-of-supporting
     type:dfn; text:list of immersive XR devices; url: list-of-immersive-xr-devices
@@ -64,6 +69,7 @@ spec: WebXR Device API - Level 1; urlPrefix: https://immersive-web.github.io/web
     type:dfn; text:eye; for:view; url: view-eye
     type:dfn; text:view offset; for:view; url: view-view-offset
     type:dfn; text:projection matrix; for:view; url: view-projection-matrix
+    type:dfn; text:XR input source; url: xr-input-source
     type: event; text: reset
 spec:infra; urlPrefix: https://infra.spec.whatwg.org/
     type:dfn; for:list; text:extend; url: list-extend
@@ -169,7 +175,6 @@ Every [=view=] for a [=simulated XR device=] has an associated <dfn for=view>dev
 Every [=view=] for a [=simulated XR device=] may have an associated <dfn for=view>field of view</dfn>, which is an instance of {{FakeXRFieldOfViewInit}} used to calculate projection matrices using depth values. If the [=field of view=] is set, projection matrix values are calculated using the [=field of view=] and {{XRRenderState/depthNear}} and {{XRRenderState/depthFar}} values.
 
 The WebXR API never exposes native origins directly, instead exposing transforms between them, so we need to specify a base reference space for {{FakeXRRigidTransformInit}}s so that we can have consistent numerical values across implementations. When used as an origin, {{FakeXRRigidTransformInit}}s are in the base reference space where the [=viewer=]'s [=native origin=] is identity at initialization, unless otherwise specified. In this space, the {{XRReferenceSpaceType/"local"}} reference space has a [=native origin=] of identity. This is an arbitrary choice: changing this reference space doesn't affect the data returned by the WebXR API, but we must make such a choice so that the tests produce the same results across different UAs. When used as an origin it is logically a transform <i>from</i> the origin's space <i>to</i> the underlying base reference space described above.
-
 
 Initialization {#initialization}
 ==============
@@ -429,8 +434,40 @@ The <dfn method for=FakeXRDevice>setBoundsGeometry(|boundsCoordinates|)</dfn> pe
 
 The <dfn method for=FakeXRDevice>simulateResetPose()</dfn> method will, as soon as possible, behave as if the [=FakeXRDevice/device=]'s [=viewer=]'s [=native origin=] had a discontinuity, triggering appropriate {{reset}} events.
 
+<div class="algorithm" data-algorithm="simulate-input-source">
 
-FakeXRInputController {#fakexrinputcontroller-init}
+The <dfn method for="FakeXRDevice">simulateInputSourceConnection(|init|)</dfn> creates a new [=simulated input source=].
+
+When this method is invoked, the user agent MUST run the following steps:
+
+  1. Let |promise| be [=a new Promise=].
+  1. Run the following steps [=in parallel=]:
+    1. Let |input| be a new [=simulated input source=].
+    1. Set |input|'s {{XRInputSource/handedness}} to |init|'s {{FakeXRInputSourceInit/handedness}}.
+    1. Set |input|'s {{XRInputSource/targetRayMode}} to |init|'s {{FakeXRInputSourceInit/targetRayMode}}.
+    1. Set |input|'s {{XRInputSource/profiles}} to |init|'s {{FakeXRInputSourceInit/profiles}}.
+    1. Set |input|'s [=simulated input source/pointer origin=] to  the result of running [=parse a rigid transform=] on |init|'s {{FakeXRInputSourceInit/pointerOrigin}}.
+    1. If |init|'s {{FakeXRInputSourceInit/gripOrigin}} is set, set |input|'s [=simulated input source/grip origin=] to  the result of running [=parse a rigid transform=] on |init|'s {{FakeXRInputSourceInit/gripOrigin}}.
+    1. Let |i| be a new {{FakeXRInputController}} object with [=FakeXRInputController/source=] as |input|.
+    1. [=/Resolve=] |promise| with |i|.
+  1. Return |promise|.
+
+
+</div>
+
+Simulated input sources {#simulated-input}
+------------
+
+This API gives tests the ability to spin up <dfn lt="simulated input source">simulated input sources</dfn>, which are [=XR input sources=] which behave like normal [=XR input sources=] from the point of view of the WebXR API. These [=simulated input sources=] can be controlled by their associated {{FakeXRInputController}} objects.
+
+
+Every [=simulated input source=] has a <dfn for="simulated input source">pointer origin</dfn> which is an {{XRRigidTransform}} used to note the position and orientation of the preferred pointing ray.
+
+Every [=simulated input source=] may have an <dfn for="simulated input source">grip origin</dfn> which is an {{XRRigidTransform}} used to set the position and orientation of the pose that should be used to render virtual objects such that they appear to be held in the user’s hand. If <code>null</code>, the [=simulated input source=]'s {{XRInputSource/gripSpace}} is also <code>null</code>.
+
+
+
+FakeXRInputController {#fakexrinputcontroller-interface}
 ------------
 
 <pre class="idl">
@@ -482,3 +519,4 @@ dictionary FakeXRButtonStateInit {
 };
 </pre>
 
+Each {{FakeXRInputController}} object has an associated <dfn for=FakeXRInputController>source</dfn>, which is a [=simulated input source=] that it is able to control.
